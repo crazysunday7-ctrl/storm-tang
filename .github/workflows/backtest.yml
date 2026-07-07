@@ -1,0 +1,138 @@
+name: Nautilus Backtest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "回测开始日期 (YYYY-MM-DD)"
+        required: false
+        default: "2024-01-01"
+      end_date:
+        description: "回测结束日期 (YYYY-MM-DD)"
+        required: false
+        default: "2026-06-30"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
+    env:
+      START_DATE: ${{ github.event.inputs.start_date || '2024-01-01' }}
+      END_DATE: ${{ github.event.inputs.end_date || '2026-06-30' }}
+      DATA_ROOT: /data/crypto_data/ticks/BTCUSDT
+      PYTHONPATH: /work
+
+    steps:
+      # 1. Checkout 代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 缓存 Rust 编译产物 (加速后续运行)
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            /work/nautilus_trader/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      # 3. 缓存 pip wheel
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      # 4. 安装系统依赖
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            python3.11 python3.11-venv python3.11-dev \
+            pkg-config libssl-dev libclang-dev clang \
+            git curl ca-certificates
+
+      # 5. 创建 Python 3.11 venv
+      - name: Create venv
+        run: |
+          python3.11 -m venv /opt/venv
+          /opt/venv/bin/pip install --upgrade pip setuptools wheel
+
+      # 6. 克隆 Nautilus 源码并编译安装 (复用 cargo 缓存)
+      - name: Build & install Nautilus
+        working-directory: /work
+        run: |
+          git clone --depth 1 --branch v1.221.0 https://github.com/nautechsystems/nautilus_trader.git
+          cd nautilus_trader
+          /opt/venv/bin/pip install maturin
+          # 编译完整 wheel (在 pyo3 crate 目录，指定 workspace Cargo.toml)
+          cd crates/pyo3
+          /opt/venv/bin/maturin build --release --manifest-path ../../Cargo.toml --out ../../../wheels
+          # 安装生成的 wheel
+          /opt/venv/bin/pip install ../../../wheels/*.whl
+          # 验证导入
+          /opt/venv/bin/python -c "
+          from nautilus_trader.backtest.engine import BacktestEngine
+          from nautilus_trader.config import BacktestEngineConfig
+          from nautilus_trader.model.enums import AccountType, OmsType
+          from nautilus_trader.model.identifiers import Venue, InstrumentId, Symbol
+          from nautilus_trader.model.objects import Money, Price, Quantity
+          from nautilus_trader.model.currencies import USDT, BTC
+          from nautilus_trader.model.data import Bar, BarType, BarSpecification
+          from nautilus_trader.model.instruments import CryptoPerpetual
+          print('ALL IMPORTS OK')
+          "
+
+      # 7. 准备数据目录 (需要你在仓库设置 Secrets: DATA_ROOT_HOST 挂载宿主机数据路径)
+      # 这里演示：如果没有数据，跳过回测只验证安装
+      - name: Check data availability
+        id: data_check
+        run: |
+          if [ -d "$DATA_ROOT" ] && [ -n "$(ls -A $DATA_ROOT/*.parquet 2>/dev/null)" ]; then
+            echo "has_data=true" >> $GITHUB_OUTPUT
+            echo "Data found at $DATA_ROOT"
+          else
+            echo "has_data=false" >> $GITHUB_OUTPUT
+            echo "WARNING: No parquet data at $DATA_ROOT. Skipping backtest."
+            echo "To run backtest, mount host data to /data in workflow or copy data here."
+          fi
+
+      # 8. 运行回测 (仅当数据存在时)
+      - name: Run backtest
+        if: steps.data_check.outputs.has_data == 'true'
+        working-directory: /work
+        run: |
+          /opt/venv/bin/python run_nautilus_backtest.py \
+            --start ${{ env.START_DATE }} \
+            --end ${{ env.END_DATE }}
+
+      # 9. 上传回测结果
+      - name: Upload results
+        if: steps.data_check.outputs.has_data == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-results
+          path: |
+            /work/backtest_results/*
+            /work/*.log
+          retention-days: 30
+
+      # 10. 即使无数据也上传安装验证日志
+      - name: Upload install log
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-verification
+          path: /work/*.log
+          retention-days: 7
