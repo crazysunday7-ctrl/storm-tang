@@ -55,19 +55,19 @@ jobs:
           restore-keys: |
             pip-${{ runner.os }}-
 
-      # 4. 安装系统依赖
+      # 4. 安装系统依赖 (Ubuntu 24.04 自带 Python 3.12)
       - name: Install system deps
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            python3.11 python3.11-venv python3.11-dev \
+            python3.12 python3.12-venv python3.12-dev \
             pkg-config libssl-dev libclang-dev clang \
             git curl ca-certificates
 
-      # 5. 创建 Python 3.11 venv
+      # 5. 创建 Python 3.12 venv
       - name: Create venv
         run: |
-          python3.11 -m venv /opt/venv
+          python3.12 -m venv /opt/venv
           /opt/venv/bin/pip install --upgrade pip setuptools wheel
 
       # 6. 克隆 Nautilus 源码并编译安装 (复用 cargo 缓存)
@@ -95,8 +95,7 @@ jobs:
           print('ALL IMPORTS OK')
           "
 
-      # 7. 准备数据目录 (需要你在仓库设置 Secrets: DATA_ROOT_HOST 挂载宿主机数据路径)
-      # 这里演示：如果没有数据，跳过回测只验证安装
+      # 7. 检查数据可用性
       - name: Check data availability
         id: data_check
         run: |
