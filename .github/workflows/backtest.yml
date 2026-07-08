@@ -22,12 +22,16 @@ jobs:
   backtest:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}
     
     env:
       START_DATE: ${{ github.event.inputs.start_date || '2024-01-01' }}
       END_DATE: ${{ github.event.inputs.end_date || '2026-06-30' }}
       DATA_ROOT: /data/crypto_data/ticks/BTCUSDT
-      PYTHONPATH: /work
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       # 1. Checkout 代码
@@ -41,7 +45,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            /work/nautilus_trader/target
+            ${{ github.workspace }}/nautilus_trader/target
           key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             cargo-${{ runner.os }}-
@@ -72,7 +76,6 @@ jobs:
 
       # 6. 克隆 Nautilus 源码并编译安装 (复用 cargo 缓存)
       - name: Build & install Nautilus
-        working-directory: /work
         run: |
           git clone --depth 1 --branch v1.221.0 https://github.com/nautechsystems/nautilus_trader.git
           cd nautilus_trader
@@ -111,7 +114,6 @@ jobs:
       # 8. 运行回测 (仅当数据存在时)
       - name: Run backtest
         if: steps.data_check.outputs.has_data == 'true'
-        working-directory: /work
         run: |
           /opt/venv/bin/python run_nautilus_backtest.py \
             --start ${{ env.START_DATE }} \
@@ -124,8 +126,8 @@ jobs:
         with:
           name: backtest-results
           path: |
-            /work/backtest_results/*
-            /work/*.log
+            ${{ github.workspace }}/backtest_results/*
+            ${{ github.workspace }}/*.log
           retention-days: 30
 
       # 10. 即使无数据也上传安装验证日志
@@ -133,5 +135,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: install-verification
-          path: /work/*.log
+          path: ${{ github.workspace }}/*.log
           retention-days: 7
