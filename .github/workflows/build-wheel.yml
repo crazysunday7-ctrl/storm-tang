@@ -1,0 +1,64 @@
+name: Build Nautilus ARM64 Wheel
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Nautilus version tag (e.g. v1.221.0)"
+        required: true
+        default: "v1.221.0"
+
+permissions:
+  contents: write  # 需要写权限上传 Release
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout Nautilus source
+        uses: actions/checkout@v4
+        with:
+          repository: nautechsystems/nautilus_trader
+          ref: v1.221.0
+          path: nautilus_trader
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            python3.12 python3.12-venv python3.12-dev \
+            pkg-config libssl-dev libclang-dev clang \
+            cmake build-essential
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python build deps
+        run: |
+          python -m pip install --upgrade pip setuptools wheel maturin cython numpy
+
+      - name: Build wheel (maturin)
+        working-directory: nautilus_trader/crates/pyo3
+        run: |
+          maturin build --release --manifest-path ../../Cargo.toml --out ./wheels
+
+      - name: Upload wheel to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nautilus-v1.221.0-arm64
+          name: "Nautilus Trader 1.221.0 ARM64 Wheel"
+          files: nautilus_trader/wheels/*.whl
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
