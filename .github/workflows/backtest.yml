@@ -38,19 +38,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. 缓存 Rust 编译产物 (加速后续运行)
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ${{ github.workspace }}/nautilus_trader/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-
-      # 3. 缓存 pip wheel
+      # 2. 缓存 pip wheel
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -59,34 +47,23 @@ jobs:
           restore-keys: |
             pip-${{ runner.os }}-
 
-      # 4. 安装系统依赖 (Ubuntu 24.04 自带 Python 3.12)
-      - name: Install system deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            python3.12 python3.12-venv python3.12-dev \
-            pkg-config libssl-dev libclang-dev clang \
-            git curl ca-certificates
+      # 2. 安装 Python 3.12 (ubuntu-latest 自带 3.12)
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
-      # 5. 创建 Python 3.12 venv
-      - name: Create venv
+      # 3. 直接安装官方 Nautilus wheel (跳过源码编译)
+      - name: Install Nautilus Trader (official wheel)
         run: |
-          python3.12 -m venv /opt/venv
-          /opt/venv/bin/pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip setuptools wheel
+          pip install nautilus-trader==1.221.0
 
-      # 6. 克隆 Nautilus 源码并编译安装 (复用 cargo 缓存)
-      - name: Build & install Nautilus
+      # 验证导入
+      - name: Verify Nautilus imports
         run: |
-          git clone --depth 1 --branch v1.221.0 https://github.com/nautechsystems/nautilus_trader.git
-          cd nautilus_trader
-          /opt/venv/bin/pip install maturin
-          # 编译完整 wheel (在 pyo3 crate 目录，指定 workspace Cargo.toml)
-          cd crates/pyo3
-          /opt/venv/bin/maturin build --release --manifest-path ../../Cargo.toml --out ../../../wheels
-          # 安装生成的 wheel
-          /opt/venv/bin/pip install ../../../wheels/*.whl
-          # 验证导入
-          /opt/venv/bin/python -c "
+          python -c "
           from nautilus_trader.backtest.engine import BacktestEngine
           from nautilus_trader.config import BacktestEngineConfig
           from nautilus_trader.model.enums import AccountType, OmsType
@@ -95,10 +72,10 @@ jobs:
           from nautilus_trader.model.currencies import USDT, BTC
           from nautilus_trader.model.data import Bar, BarType, BarSpecification
           from nautilus_trader.model.instruments import CryptoPerpetual
-          print('ALL IMPORTS OK')
+          print('=== ALL IMPORTS OK ===')
           "
 
-      # 7. 检查数据可用性
+      # 3. 检查数据可用性 (Self-hosted Runner 才有数据)
       - name: Check data availability
         id: data_check
         run: |
@@ -108,18 +85,18 @@ jobs:
           else
             echo "has_data=false" >> $GITHUB_OUTPUT
             echo "WARNING: No parquet data at $DATA_ROOT. Skipping backtest."
-            echo "To run backtest, mount host data to /data in workflow or copy data here."
+            echo "This workflow must run on self-hosted runner with data mounted at /data"
           fi
 
-      # 8. 运行回测 (仅当数据存在时)
+      # 4. 运行回测 (仅当数据存在时)
       - name: Run backtest
         if: steps.data_check.outputs.has_data == 'true'
         run: |
-          /opt/venv/bin/python run_nautilus_backtest.py \
+          /opt/venv/bin/python ${{ github.workspace }}/run_nautilus_backtest.py \
             --start ${{ env.START_DATE }} \
             --end ${{ env.END_DATE }}
 
-      # 9. 上传回测结果
+      # 5. 上传回测结果
       - name: Upload results
         if: steps.data_check.outputs.has_data == 'true'
         uses: actions/upload-artifact@v4
@@ -130,7 +107,7 @@ jobs:
             ${{ github.workspace }}/*.log
           retention-days: 30
 
-      # 10. 即使无数据也上传安装验证日志
+      # 6. 上传安装验证日志
       - name: Upload install log
         uses: actions/upload-artifact@v4
         with:
