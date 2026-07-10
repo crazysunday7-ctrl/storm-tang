@@ -50,6 +50,8 @@ jobs:
       - name: Build wheel (maturin)
         working-directory: nautilus_trader
         run: |
+          pwd
+          ls -la Cargo.toml
           maturin build --release --manifest-path Cargo.toml --out ./wheels
 
       - name: Upload wheel to Release
