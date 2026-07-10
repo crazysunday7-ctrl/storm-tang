@@ -57,7 +57,7 @@ jobs:
         with:
           tag_name: nautilus-v1.221.0-arm64
           name: "Nautilus Trader 1.221.0 ARM64 Wheel"
-          files: nautilus_trader/crates/pyo3/wheels/*.whl
+          files: nautilus_trader/wheels/*.whl
           draft: false
           prerelease: false
         env:
