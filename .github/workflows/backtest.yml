@@ -53,11 +53,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      # 3. 直接安装自编译的 ARM64 wheel (从 GitHub Release 下载)
+      # 3. 直接安装自编译的 ARM64 wheel (从 GitHub Release assets 页面解析 HTML 找 .whl)
       - name: Install Nautilus Trader (custom ARM64 wheel)
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install --index-url https://github.com/crazysunday7-ctrl/storm-tang/releases/download/nautilus-v1.221.0-arm64/ nautilus-trader==1.221.0
+          pip install --find-links https://github.com/crazysunday7-ctrl/storm-tang/releases/tag/nautilus-v1.221.0-arm64/ nautilus-trader==1.221.0
 
       # 验证导入
       - name: Verify Nautilus imports
