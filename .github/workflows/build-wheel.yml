@@ -47,8 +47,8 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel maturin cython numpy
 
       - name: Build wheel (maturin)
+        working-directory: nautilus_trader
         run: |
-          cd nautilus_trader
           maturin build --release --manifest-path Cargo.toml --out ./wheels
 
       - name: Upload wheel to Release
