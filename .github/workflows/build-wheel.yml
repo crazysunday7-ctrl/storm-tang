@@ -48,8 +48,8 @@ jobs:
 
       - name: Build wheel (maturin)
         run: |
-          cd nautilus_trader/crates/pyo3
-          maturin build --release --manifest-path ../../Cargo.toml --out ./wheels
+          cd nautilus_trader
+          maturin build --release --manifest-path Cargo.toml --out ./wheels
 
       - name: Upload wheel to Release
         uses: softprops/action-gh-release@v2
