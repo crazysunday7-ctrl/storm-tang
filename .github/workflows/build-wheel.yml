@@ -22,6 +22,7 @@ jobs:
         with:
           repository: nautechsystems/nautilus_trader
           ref: v1.221.0
+          path: nautilus_trader
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
