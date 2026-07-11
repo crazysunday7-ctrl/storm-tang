@@ -108,6 +108,17 @@ jobs:
             ${{ github.workspace }}/*.log
           retention-days: 30
 
+      # 新增：自动提交结果回仓库（方便本地 git pull 直接看到）
+      - name: Commit results back to repo
+        if: steps.data_check.outputs.has_data == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp backtest_results/results.json results_latest.json
+          git add results_latest.json
+          git commit -m "chore: update backtest results [skip ci]" || echo "No changes"
+          git push origin main
+
       # 6. 上传安装验证日志
       - name: Upload install log
         uses: actions/upload-artifact@v4
