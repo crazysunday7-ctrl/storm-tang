@@ -91,11 +91,11 @@ jobs:
       - name: Run backtest
         if: steps.data_check.outputs.has_data == 'true'
         run: |
-          mkdir -p ${{ github.workspace }}/backtest_results
-          /opt/venv/bin/python ${{ github.workspace }}/run_nautilus_backtest.py \
+          mkdir -p ./backtest_results
+          python ./run_nautilus_backtest.py \
             --start ${{ env.START_DATE }} \
             --end ${{ env.END_DATE }} \
-            --output ${{ github.workspace }}/backtest_results/results.json
+            --output ./backtest_results/results.json
 
       # 5. 上传回测结果
       - name: Upload results
@@ -108,16 +108,25 @@ jobs:
             ${{ github.workspace }}/*.log
           retention-days: 30
 
-      # 新增：自动提交结果回仓库（方便本地 git pull 直接看到）
+      # 自动提交结果回仓库（强制推送，用 GITHUB_TOKEN 认证）
       - name: Commit results back to repo
         if: steps.data_check.outputs.has_data == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp backtest_results/results.json results_latest.json
-          git add results_latest.json
-          git commit -m "chore: update backtest results [skip ci]" || echo "No changes"
-          git push origin main
+          mkdir -p backtest_results
+          # 结果文件已经在 run_nautilus_backtest.py 的 --output 指定路径生成
+          if [ -f backtest_results/results.json ]; then
+            cp backtest_results/results.json results_latest.json
+            git add results_latest.json
+            git commit -m "chore: update backtest results [skip ci]" || echo "No changes"
+            git push origin HEAD:main
+          else
+            echo "results.json not found, skipping commit"
+            ls -la backtest_results/
+          fi
 
       # 6. 上传安装验证日志
       - name: Upload install log

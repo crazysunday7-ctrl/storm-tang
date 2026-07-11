@@ -9,11 +9,12 @@ import os
 from datetime import date, timedelta
 
 # 添加工作目录
-sys.path.insert(0, "/work")
+sys.path.insert(0, os.getcwd())
 
 import pandas as pd
 import numpy as np
 import time
+import json
 
 from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.config import BacktestEngineConfig
@@ -27,6 +28,7 @@ from decimal import Decimal
 
 from strategy_v2_nautilus import StormV2Pure, StormV2Config
 
+# GitHub Actions Self-hosted Runner 数据路径（/mnt/data 挂载 U 盘）
 DATA_ROOT = "/data/crypto_data/ticks/BTCUSDT"
 
 def load_bars(tf_seconds, start_d, end_d):
@@ -151,6 +153,8 @@ def main():
 
     # 8. 输出结果
     account = engine.cache.account_for_venue(Venue("BINANCE"))
+    final = 0.0
+    pnl = 0.0
     if account:
         for currency, balance in account.balances().items():
             final = float(balance.total)
@@ -164,22 +168,35 @@ def main():
     print(f"成交笔数: {len(fills)}")
     print(f"订单数: {len(orders)}")
 
-    # 保存结果
-    os.makedirs("/work/backtest_results", exist_ok=True)
-    import json
+    # 9. 保存结果（JSON + 文本报告）
+    os.makedirs("./backtest_results", exist_ok=True)
     result = {
         "start": args.start,
         "end": args.end,
-        "final_equity": final if 'final' in locals() else 0,
-        "pnl": pnl if 'pnl' in locals() else 0,
+        "final_equity": final,
+        "pnl": pnl,
         "total_fills": len(fills),
         "total_orders": len(orders),
     }
-    with open("/work/backtest_results/result.json", "w") as f:
+    with open("./backtest_results/results.json", "w") as f:
         json.dump(result, f, indent=2)
 
+    # 生成可读文本报告
+    with open("./backtest_results/report.txt", "w") as f:
+        f.write(f"=== Storm Tang V2 回测报告 ===\n")
+        f.write(f"区间: {args.start} 到 {args.end}\n")
+        f.write(f"数据源: {DATA_ROOT}\n")
+        f.write(f"初始资金: 5000 USDT\n")
+        f.write(f"最终权益: {final:.2f} USDT\n")
+        f.write(f"盈亏: {pnl:+.2f} USDT ({pnl/50:.1f}%)\n")
+        f.write(f"成交笔数: {len(fills)}\n")
+        f.write(f"订单数: {len(orders)}\n")
+        if len(fills) > 0:
+            f.write(f"平均每笔盈亏: {pnl/len(fills):+.2f} USDT\n")
+        f.write(f"\n生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
     engine.dispose()
-    print("回测完成")
+    print("回测完成，结果已保存到 ./backtest_results/")
 
 if __name__ == "__main__":
     main()
