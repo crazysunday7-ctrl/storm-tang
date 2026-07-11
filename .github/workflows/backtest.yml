@@ -91,9 +91,11 @@ jobs:
       - name: Run backtest
         if: steps.data_check.outputs.has_data == 'true'
         run: |
+          mkdir -p ${{ github.workspace }}/backtest_results
           /opt/venv/bin/python ${{ github.workspace }}/run_nautilus_backtest.py \
             --start ${{ env.START_DATE }} \
-            --end ${{ env.END_DATE }}
+            --end ${{ env.END_DATE }} \
+            --output ${{ github.workspace }}/backtest_results/results.json
 
       # 5. 上传回测结果
       - name: Upload results
@@ -102,7 +104,7 @@ jobs:
         with:
           name: backtest-results
           path: |
-            ${{ github.workspace }}/backtest_results/*
+            ${{ github.workspace }}/backtest_results/results.json
             ${{ github.workspace }}/*.log
           retention-days: 30
 
