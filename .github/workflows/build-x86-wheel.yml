@@ -1,0 +1,29 @@
+name: Build x86_64 Nautilus Wheel
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Clone Nautilus v1.221.0
+        run: |
+          git clone --depth 1 --branch 1.221.0 https://github.com/nautechsystems/nautilus_trader.git
+          cd nautilus_trader
+          git submodule update --init --recursive
+      - name: Build wheel
+        run: |
+          cd nautilus_trader
+          pip install maturin
+          cd crates/pyo3
+          ~/.cargo/bin/cargo build --release 2>&1 | tail -20
+          ~/.cargo/bin/maturin build --release 2>&1 | tail -20
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: nautilus-x86-wheel
+          path: nautilus_trader/crates/pyo3/target/wheels/*.whl
